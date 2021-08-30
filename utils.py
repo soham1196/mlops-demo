@@ -9,14 +9,21 @@ from sklearn.metrics import confusion_matrix, accuracy_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
+from azureml.core import Workspace, Dataset
 
 
-# load compressed MNIST gz files and return numpy arrays
+
 def load_model(path):
-    df = Dataset.get_by_name(workspace, name=path)
-    df = df.to_pandas_dataframe()
+  subscription_id = '71b2b08a-790d-402f-9800-fa9ad29fcb60'
+  resource_group = 'rg_sm'
+  workspace_name = 'SM1196'
 
-    return df
+  workspace = Workspace(subscription_id, resource_group, workspace_name)
+
+  df = Dataset.get_by_name(workspace, name=path)
+  df = df.to_pandas_dataframe()
+
+  return df
 
 # flag = 0 for train data, flag = 1 for test data
 def feature_engineering(X, flag = 0, training_cols = None):
@@ -35,12 +42,6 @@ def feature_engineering(X, flag = 0, training_cols = None):
 
   if flag == 1:
     X = X.T.reindex(training_cols).T.fillna(0)
-    # missing_cols = set( training_cols ) - set( X.columns )
-    # # Add a missing column in test set with default value equal to 0
-    # for c in missing_cols:
-    #     X[c] = 0
-    # # Ensure the order of column in the test set is in the same order than in train set
-    # X = X[training_cols]
 
   return X, X.columns
 
