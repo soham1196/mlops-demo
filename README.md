@@ -1,4 +1,4 @@
-# MlOPS Demo
+# MLOps Demo
 
 # Documentation
 
@@ -27,7 +27,7 @@ Join the two dataset using mql_id. If the lead has a seller we can say the lead 
 # What is MLOps?
 
 <p align="center">
-  <img src="docs/images/ml-lifecycle.png" alt="Azure Machine Learning Lifecycle" width="700"/>
+  <img src="https://raw.githubusercontent.com/soham1196/ml-ops-pipeline/master/docs/images/ml-lifecycle.png" alt="Azure Machine Learning Lifecycle" width="700"/>
 </p>
 
 MLOps empowers data scientists and machine learning engineers to bring together their knowledge and skills to simplify the process of going from model development to release/deployment. ML Ops enables you to track, version, test, certify and reuse assets in every part of the machine learning lifecycle and provides orchestration services to streamline managing this lifecycle. This allows practitioners to automate the end to end machine Learning lifecycle to frequently update models, test new models, and continuously roll out new ML models alongside your other applications and services.
