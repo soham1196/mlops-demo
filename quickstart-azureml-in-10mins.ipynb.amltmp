@@ -1,0 +1,563 @@
+{
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "source": [
+        "![Impressions](https://PixelServer20190423114238.azurewebsites.net/api/impressions/NotebookVM/tutorials/quickstart-ci/AzureMLin10mins.png)"
+      ],
+      "metadata": {}
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# Quickstart: Train and deploy a model in Azure Machine Learning in 10 minutes\n",
+        "\n",
+        "In this quickstart, learn how to get started with Azure Machine Learning. You'll train an image classification model using the [MNIST](https://azure.microsoft.com/services/open-datasets/catalog/mnist/) dataset.\n",
+        "\n",
+        "You'll learn how to:\n",
+        "\n",
+        "* Download a dataset and look at the data\n",
+        "* Train an image classification model and log metrics using MLflow\n",
+        "* Deploy the model to do real-time inference"
+      ],
+      "metadata": {
+        "nteract": {
+          "transient": {
+            "deleting": false
+          }
+        }
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Import Data\n",
+        "\n",
+        "Before you train a model, you need to understand the data you're using to train it. In this section, learn how to:\n",
+        "\n",
+        "* Download the MNIST dataset\n",
+        "* Display some sample images\n",
+        "\n",
+        "You'll use Azure Open Datasets to get the raw MNIST data files. [Azure Open Datasets](https://docs.microsoft.com/azure/open-datasets/overview-what-are-open-datasets) are curated public datasets that you can use to add scenario-specific features to machine learning solutions for better models. Each dataset has a corresponding class, `MNIST` in this case, to retrieve the data in different ways."
+      ],
+      "metadata": {
+        "nteract": {
+          "transient": {
+            "deleting": false
+          }
+        }
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import os\n",
+        "from azureml.opendatasets import MNIST\n",
+        "\n",
+        "data_folder = os.path.join(os.getcwd(), \"/tmp/qs_data\")\n",
+        "os.makedirs(data_folder, exist_ok=True)\n",
+        "\n",
+        "mnist_file_dataset = MNIST.get_file_dataset()\n",
+        "mnist_file_dataset.download(data_folder, overwrite=True)"
+      ],
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "execution_count": 1,
+          "data": {
+            "text/plain": "['/tmp/qs_data/https%3A/%2Fazureopendatastorage.azurefd.net/mnist/t10k-images-idx3-ubyte.gz',\n '/tmp/qs_data/https%3A/%2Fazureopendatastorage.azurefd.net/mnist/t10k-labels-idx1-ubyte.gz',\n '/tmp/qs_data/https%3A/%2Fazureopendatastorage.azurefd.net/mnist/train-images-idx3-ubyte.gz',\n '/tmp/qs_data/https%3A/%2Fazureopendatastorage.azurefd.net/mnist/train-labels-idx1-ubyte.gz']"
+          },
+          "metadata": {}
+        }
+      ],
+      "execution_count": 1,
+      "metadata": {
+        "gather": {
+          "logged": 1630221623769
+        }
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "### Take a look at the data\n",
+        "\n",
+        "Load the compressed files into `numpy` arrays. Then use `matplotlib` to plot 30 random images from the dataset with their labels above them. \n",
+        "\n",
+        "Note this step requires a `load_data` function that's included in an `utils.py` file. This file is placed in the same folder as this notebook. The `load_data` function simply parses the compressed files into numpy arrays."
+      ],
+      "metadata": {
+        "nteract": {
+          "transient": {
+            "deleting": false
+          }
+        }
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from utils import load_data\n",
+        "import matplotlib.pyplot as plt\n",
+        "import numpy as np\n",
+        "import glob\n",
+        "\n",
+        "\n",
+        "# note we also shrink the intensity values (X) from 0-255 to 0-1. This helps the model converge faster.\n",
+        "X_train = (\n",
+        "    load_data(\n",
+        "        glob.glob(\n",
+        "            os.path.join(data_folder, \"**/train-images-idx3-ubyte.gz\"), recursive=True\n",
+        "        )[0],\n",
+        "        False,\n",
+        "    )\n",
+        "    / 255.0\n",
+        ")\n",
+        "X_test = (\n",
+        "    load_data(\n",
+        "        glob.glob(\n",
+        "            os.path.join(data_folder, \"**/t10k-images-idx3-ubyte.gz\"), recursive=True\n",
+        "        )[0],\n",
+        "        False,\n",
+        "    )\n",
+        "    / 255.0\n",
+        ")\n",
+        "y_train = load_data(\n",
+        "    glob.glob(\n",
+        "        os.path.join(data_folder, \"**/train-labels-idx1-ubyte.gz\"), recursive=True\n",
+        "    )[0],\n",
+        "    True,\n",
+        ").reshape(-1)\n",
+        "y_test = load_data(\n",
+        "    glob.glob(\n",
+        "        os.path.join(data_folder, \"**/t10k-labels-idx1-ubyte.gz\"), recursive=True\n",
+        "    )[0],\n",
+        "    True,\n",
+        ").reshape(-1)\n",
+        "\n",
+        "\n",
+        "# now let's show some randomly chosen images from the traininng set.\n",
+        "count = 0\n",
+        "sample_size = 30\n",
+        "plt.figure(figsize=(16, 6))\n",
+        "for i in np.random.permutation(X_train.shape[0])[:sample_size]:\n",
+        "    count = count + 1\n",
+        "    plt.subplot(1, sample_size, count)\n",
+        "    plt.axhline(\"\")\n",
+        "    plt.axvline(\"\")\n",
+        "    plt.text(x=10, y=-10, s=y_train[i], fontsize=18)\n",
+        "    plt.imshow(X_train[i].reshape(28, 28), cmap=plt.cm.Greys)\n",
+        "plt.show()"
+      ],
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": "<Figure size 1152x432 with 30 Axes>",
+            "image/png": "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\n"
+          },
+          "metadata": {
+            "needs_background": "light"
+          }
+        }
+      ],
+      "execution_count": 2,
+      "metadata": {
+        "gather": {
+          "logged": 1630221700962
+        }
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Train model and log metrics with MLflow\n",
+        "\n",
+        "You'll train the model using the code below. Note that you are using MLflow autologging to track metrics and log model artefacts.\n",
+        "\n",
+        "You'll be using the [LogisticRegression](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html) classifier from the [SciKit Learn framework](https://scikit-learn.org/) to classify the data.\n",
+        "\n",
+        "**Note: The model training takes approximately 2 minutes to complete.**"
+      ],
+      "metadata": {
+        "nteract": {
+          "transient": {
+            "deleting": false
+          }
+        }
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# create the model\n",
+        "import mlflow\n",
+        "import numpy as np\n",
+        "from sklearn.linear_model import LogisticRegression\n",
+        "from azureml.core import Workspace\n",
+        "\n",
+        "# connect to your workspace\n",
+        "ws = Workspace.from_config()\n",
+        "\n",
+        "# create experiment and start logging to a new run in the experiment\n",
+        "experiment_name = \"azure-ml-in10-mins-tutorial\"\n",
+        "\n",
+        "# set up MLflow to track the metrics\n",
+        "mlflow.set_tracking_uri(ws.get_mlflow_tracking_uri())\n",
+        "mlflow.set_experiment(experiment_name)\n",
+        "mlflow.autolog()\n",
+        "\n",
+        "# set up the Logistic regression model\n",
+        "reg = 0.5\n",
+        "clf = LogisticRegression(\n",
+        "    C=1.0 / reg, solver=\"liblinear\", multi_class=\"auto\", random_state=42\n",
+        ")\n",
+        "\n",
+        "# train the model\n",
+        "with mlflow.start_run() as run:\n",
+        "    clf.fit(X_train, y_train)"
+      ],
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "2021/08/29 07:24:48 INFO mlflow.tracking.fluent: Autologging successfully enabled for sklearn.\n",
+            "2021/08/29 07:24:48 INFO mlflow.pyspark.ml: No SparkSession detected. Autologging will log pyspark.ml models contained in the default allowlist. To specify a custom allowlist, initialize a SparkSession prior to calling mlflow.pyspark.ml.autolog() and specify the path to your allowlist file via the spark.mlflow.pysparkml.autolog.logModelAllowlistFile conf.\n"
+          ]
+        }
+      ],
+      "execution_count": 4,
+      "metadata": {
+        "gather": {
+          "logged": 1630222041093
+        },
+        "jupyter": {
+          "outputs_hidden": false,
+          "source_hidden": false
+        },
+        "nteract": {
+          "transient": {
+            "deleting": false
+          }
+        }
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## View Experiment\n",
+        "In the left-hand menu in Azure Machine Learning Studio, select __Experiments__ and then select your experiment (azure-ml-in10-mins-tutorial). An experiment is a grouping of many runs from a specified script or piece of code. Information for the run is stored under that experiment. If the name doesn't exist when you submit an experiment, if you select your run you will see various tabs containing metrics, logs, explanations, etc.\n",
+        "\n",
+        "## Version control your models with the model registry\n",
+        "\n",
+        "You can use model registration to store and version your models in your workspace. Registered models are identified by name and version. Each time you register a model with the same name as an existing one, the registry increments the version. The code below registers and versions the model you trained above. Once you have executed the code cell below you will be able to see the model in the registry by selecting __Models__ in the left-hand menu in Azure Machine Learning Studio."
+      ],
+      "metadata": {}
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# register the model\n",
+        "model_uri = \"runs:/{}/model\".format(run.info.run_id)\n",
+        "model = mlflow.register_model(model_uri, \"sklearn_mnist_model\")"
+      ],
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "Successfully registered model 'sklearn_mnist_model'.\n",
+            "2021/08/29 07:27:25 INFO mlflow.tracking._model_registry.client: Waiting up to 300 seconds for model version to finish creation.                     Model name: sklearn_mnist_model, version 1\n",
+            "Created version '1' of model 'sklearn_mnist_model'.\n"
+          ]
+        }
+      ],
+      "execution_count": 5,
+      "metadata": {
+        "gather": {
+          "logged": 1630222045328
+        },
+        "jupyter": {
+          "outputs_hidden": false,
+          "source_hidden": false
+        },
+        "nteract": {
+          "transient": {
+            "deleting": false
+          }
+        }
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Deploy the model for real-time inference\n",
+        "In this section you learn how to deploy a model so that an application can consume (inference) the model over REST.\n",
+        "\n",
+        "### Create deployment configuration\n",
+        "The code cell gets a _curated environment_, which specifies all the dependencies required to host the model (for example, the packages like scikit-learn). Also, you create a _deployment configuration_, which specifies the amount of compute required to host the model. In this case, the compute will have 1CPU and 1GB memory."
+      ],
+      "metadata": {}
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# create environment for the deploy\n",
+        "from azureml.core.environment import Environment\n",
+        "from azureml.core.conda_dependencies import CondaDependencies\n",
+        "from azureml.core.webservice import AciWebservice\n",
+        "\n",
+        "# get a curated environment\n",
+        "env = Environment.get(\n",
+        "    workspace=ws, \n",
+        "    name=\"AzureML-sklearn-0.24.1-ubuntu18.04-py37-cpu-inference\",\n",
+        "    version=1\n",
+        ")\n",
+        "env.inferencing_stack_version='latest'\n",
+        "\n",
+        "# create deployment config i.e. compute resources\n",
+        "aciconfig = AciWebservice.deploy_configuration(\n",
+        "    cpu_cores=1,\n",
+        "    memory_gb=1,\n",
+        "    tags={\"data\": \"MNIST\", \"method\": \"sklearn\"},\n",
+        "    description=\"Predict MNIST with sklearn\",\n",
+        ")"
+      ],
+      "outputs": [],
+      "execution_count": null,
+      "metadata": {
+        "gather": {
+          "logged": 1612881061728
+        },
+        "jupyter": {
+          "outputs_hidden": false,
+          "source_hidden": false
+        },
+        "nteract": {
+          "transient": {
+            "deleting": false
+          }
+        }
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "### Deploy model\n",
+        "\n",
+        "This next code cell deploys the model to Azure Container Instance (ACI).\n",
+        "\n",
+        "**Note: The deployment takes approximately 3 minutes to complete.**"
+      ],
+      "metadata": {
+        "nteract": {
+          "transient": {
+            "deleting": false
+          }
+        }
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "%%time\n",
+        "import uuid\n",
+        "from azureml.core.model import InferenceConfig\n",
+        "from azureml.core.environment import Environment\n",
+        "from azureml.core.model import Model\n",
+        "\n",
+        "# get the registered model\n",
+        "model = Model(ws, \"sklearn_mnist_model\")\n",
+        "\n",
+        "# create an inference config i.e. the scoring script and environment\n",
+        "inference_config = InferenceConfig(entry_script=\"score.py\", environment=env)\n",
+        "\n",
+        "# deploy the service\n",
+        "service_name = \"sklearn-mnist-svc-\" + str(uuid.uuid4())[:4]\n",
+        "service = Model.deploy(\n",
+        "    workspace=ws,\n",
+        "    name=service_name,\n",
+        "    models=[model],\n",
+        "    inference_config=inference_config,\n",
+        "    deployment_config=aciconfig,\n",
+        ")\n",
+        "\n",
+        "service.wait_for_deployment(show_output=True)"
+      ],
+      "outputs": [],
+      "execution_count": null,
+      "metadata": {
+        "jupyter": {
+          "outputs_hidden": false,
+          "source_hidden": false
+        },
+        "nteract": {
+          "transient": {
+            "deleting": false
+          }
+        }
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "The [*scoring script*](score.py) file referenced in the code above can be found in the same folder as this notebook, and has two functions:\n",
+        "\n",
+        "1. an `init` function that executes once when the service starts - in this function you normally get the model from the registry and set global variables\n",
+        "1. a `run(data)` function that executes each time a call is made to the service. In this function, you normally format the input data, run a prediction, and output the predicted result.\n",
+        "\n",
+        "### View Endpoint\n",
+        "Once the model has been successfully deployed, you can view the endpoint by navigating to __Endpoints__ in the left-hand menu in Azure Machine Learning Studio. You will be able to see the state of the endpoint (healthy/unhealthy), logs, and consume (how applications can consume the model)."
+      ],
+      "metadata": {}
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Test the model service\n",
+        "\n",
+        "You can test the model by sending a raw HTTP request to test the web service. "
+      ],
+      "metadata": {
+        "nteract": {
+          "transient": {
+            "deleting": false
+          }
+        }
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# send raw HTTP request to test the web service.\n",
+        "import requests\n",
+        "\n",
+        "# send a random row from the test set to score\n",
+        "random_index = np.random.randint(0, len(X_test) - 1)\n",
+        "input_data = '{\"data\": [' + str(list(X_test[random_index])) + \"]}\"\n",
+        "\n",
+        "headers = {\"Content-Type\": \"application/json\"}\n",
+        "\n",
+        "resp = requests.post(service.scoring_uri, input_data, headers=headers)\n",
+        "\n",
+        "print(\"POST to url\", service.scoring_uri)\n",
+        "print(\"label:\", y_test[random_index])\n",
+        "print(\"prediction:\", resp.text)"
+      ],
+      "outputs": [],
+      "execution_count": null,
+      "metadata": {
+        "gather": {
+          "logged": 1612881538381
+        },
+        "jupyter": {
+          "outputs_hidden": false,
+          "source_hidden": false
+        },
+        "nteract": {
+          "transient": {
+            "deleting": false
+          }
+        }
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Clean up resources\n",
+        "\n",
+        "If you're not going to continue to use this model, delete the Model service using:"
+      ],
+      "metadata": {}
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# if you want to keep workspace and only delete endpoint (it will incur cost while running)\n",
+        "service.delete()"
+      ],
+      "outputs": [],
+      "execution_count": null,
+      "metadata": {
+        "gather": {
+          "logged": 1612881556520
+        },
+        "jupyter": {
+          "outputs_hidden": false,
+          "source_hidden": false
+        },
+        "nteract": {
+          "transient": {
+            "deleting": false
+          }
+        }
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "If you want to control cost further, stop the compute instance by selecting the \"Stop compute\" button next to the **Compute** dropdown.  Then start the compute instance again the next time you need it."
+      ],
+      "metadata": {}
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "\n",
+        "## Next Steps\n",
+        "\n",
+        "In this quickstart, you learned how to run machine learning code in Azure Machine Learning.\n",
+        "\n",
+        "Now that you have working code in a development environment, learn how to submit a **_job_** - ideally on a schedule or trigger (for example, arrival of new data).\n",
+        "\n",
+        " [**Learn how to get started with Azure ML Job Submission**](../quickstart-azureml-python-sdk/quickstart-azureml-python-sdk.ipynb) "
+      ],
+      "metadata": {}
+    }
+  ],
+  "metadata": {
+    "authors": [
+      {
+        "name": "cewidste"
+      }
+    ],
+    "kernelspec": {
+      "name": "python3-azureml",
+      "language": "python",
+      "display_name": "Python 3.6 - AzureML"
+    },
+    "language_info": {
+      "name": "python",
+      "version": "3.6.9",
+      "mimetype": "text/x-python",
+      "codemirror_mode": {
+        "name": "ipython",
+        "version": 3
+      },
+      "pygments_lexer": "ipython3",
+      "nbconvert_exporter": "python",
+      "file_extension": ".py"
+    },
+    "notice": "Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT License.",
+    "nteract": {
+      "version": "nteract-front-end@1.0.0"
+    },
+    "categories": [
+      "tutorials",
+      "compute-instance-quickstarts"
+    ],
+    "kernel_info": {
+      "name": "python3-azureml"
+    },
+    "microsoft": {
+      "host": {
+        "AzureML": {
+          "notebookHasBeenCompleted": true
+        }
+      }
+    }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 4
+}
