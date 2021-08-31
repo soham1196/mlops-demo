@@ -52,4 +52,4 @@ MLflow is an open source platform for managing the end-to-end machine learning l
   <img src="https://raw.githubusercontent.com/soham1196/ml-ops-pipeline/master/docs/images/mflow.png" alt="Mlflow Lifecycle" width="700"/>
 </p>
 
-
+#### Coming up: CI/CD Integration
