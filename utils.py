@@ -14,9 +14,9 @@ from azureml.core import Workspace, Dataset
 
 
 def load_model(path):
-  subscription_id = '71b2b08a-790d-402f-9800-fa9ad29fcb60'
-  resource_group = 'rg_sm'
-  workspace_name = 'SM1196'
+  subscription_id = '<subscription_id>'
+  resource_group = '<resource_group>'
+  workspace_name = '<workspace_name>'
 
   workspace = Workspace(subscription_id, resource_group, workspace_name)
 

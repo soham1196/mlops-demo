@@ -50,3 +50,6 @@ Thumbs.db
 .ipynb_aml_checkpoints/ 
 *.amltmp 
 *.amltemp
+
+*.trash
+.trash
